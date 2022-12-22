@@ -6,8 +6,7 @@ import {
   ApolloProvider,
   InMemoryCache,
   gql,
-  useQuery,
-  useMutation,
+  useLazyQuery,
 } from "@apollo/client";
 
 import { link } from "./link.js";
@@ -22,37 +21,15 @@ const ALL_PEOPLE = gql`
   }
 `;
 
-const ADD_PERSON = gql`
-  mutation AddPerson($name: String) {
-    addPerson(name: $name) {
-      id
-      name
-    }
-  }
-`;
-
 function App() {
-  const [name, setName] = useState('');
-  const {
-    loading,
-    data,
-  } = useQuery(ALL_PEOPLE);
-
-  const [addPerson] = useMutation(ADD_PERSON, {
-    update: (cache, { data: { addPerson: addPersonData } }) => {
-      const peopleResult = cache.readQuery({ query: ALL_PEOPLE });
-
-      cache.writeQuery({
-        query: ALL_PEOPLE,
-        data: {
-          ...peopleResult,
-          people: [
-            ...peopleResult.people,
-            addPersonData,
-          ],
-        },
-      });
-    },
+  const [onCompletedCount, setOnCompletedCount] = useState(0);
+  const [people, setPeople] = useState([]);
+  const [load, { loading, data }] =
+    useLazyQuery(ALL_PEOPLE, {
+    fetchPolicy: "cache-and-network",
+    onCompleted: (data) => {
+      setPeople(data.people);
+      setOnCompletedCount((prev) => prev + 1 ) }
   });
 
   return (
@@ -62,32 +39,26 @@ function App() {
         This application can be used to demonstrate an error in Apollo Client.
       </p>
       <div className="add-person">
-        <label htmlFor="name">Name</label>
-        <input
-          type="text"
-          name="name"
-          value={name}
-          onChange={evt => setName(evt.target.value)}
-        />
         <button
           onClick={() => {
-            addPerson({ variables: { name } });
-            setName('');
+            setPeople([]);
+            load();
           }}
         >
-          Add person
+          Run Query
         </button>
       </div>
+      <h2>onCompleted Count</h2>
+      <p>{onCompletedCount}</p>
       <h2>Names</h2>
-      {loading ? (
+      {loading && (
         <p>Loading…</p>
-      ) : (
-        <ul>
-          {data?.people.map(person => (
-            <li key={person.id}>{person.name}</li>
-          ))}
-        </ul>
       )}
+      <ul>
+        {people?.map(person => (
+          <li key={person.id}>{person.name}</li>
+        ))}
+      </ul>
     </main>
   );
 }
